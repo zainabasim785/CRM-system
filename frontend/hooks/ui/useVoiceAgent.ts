@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { AgentMessage, AgentMode, AgentStatus } from "../../types/agent";
-import { mockTranscribe, resolveIntent } from "../../lib/mockAgentEngine";
+import { api } from "../../lib/apiClient";
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -26,6 +26,7 @@ export function useVoiceAgent() {
   const [status, setStatus] = useState<AgentStatus>("idle");
   const [messages, setMessages] = useState<AgentMessage[]>([buildGreeting()]);
   const [partialCaption, setPartialCaption] = useState("");
+  const convRef = useRef<string | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pushMessage = useCallback(
@@ -39,22 +40,37 @@ export function useVoiceAgent() {
   );
 
   const respond = useCallback(
-    (visitorText: string) => {
+    async (visitorText: string) => {
       setStatus("thinking");
 
-      setTimeout(() => {
-        const result = resolveIntent(visitorText);
-        setStatus(result.requiresEscalation ? "escalated" : "speaking");
+      try {
+        // Call backend triage endpoint
+        const result = await api.triage({
+          message: visitorText,
+          conversation_id: convRef.current ?? undefined,
+        });
+
+        // Save conversation ID for follow-ups
+        convRef.current = result.conversation_id;
+
+        setStatus(result.requires_escalation ? "escalated" : "speaking");
         pushMessage({ role: "agent", text: result.reply });
 
         if (resetTimer.current) clearTimeout(resetTimer.current);
 
-        const holdDuration = result.requiresEscalation
+        const holdDuration = result.requires_escalation
           ? 2400
           : Math.min(3200, 900 + result.reply.length * 22);
 
         resetTimer.current = setTimeout(() => setStatus("idle"), holdDuration);
-      }, 1100);
+      } catch (err) {
+        console.error("Triage API error:", err);
+        pushMessage({
+          role: "agent",
+          text: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
+        });
+        setStatus("idle");
+      }
     },
     [pushMessage]
   );
@@ -64,14 +80,54 @@ export function useVoiceAgent() {
     setStatus("listening");
     setPartialCaption("");
 
-    mockTranscribe(1800).then((text) => {
-      setPartialCaption(text);
-      setTimeout(() => {
-        pushMessage({ role: "visitor", text });
+    // Use browser SpeechRecognition if available, else simulate
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const SpeechRecognition =
+        (window as any).webkitSpeechRecognition ||
+        (window as any).SpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((r: any) => r[0].transcript)
+          .join("");
+        setPartialCaption(transcript);
+
+        if (event.results[0].isFinal) {
+          recognition.stop();
+          pushMessage({ role: "visitor", text: transcript });
+          setPartialCaption("");
+          respond(transcript);
+        }
+      };
+
+      recognition.onerror = () => {
+        // Fall back to mock on error
+        setStatus("idle");
         setPartialCaption("");
-        respond(text);
-      }, 500);
-    });
+      };
+
+      recognition.start();
+    } else {
+      // Fallback: mock transcription
+      setTimeout(() => {
+        const texts = [
+          "Hi, are you open on Saturdays?",
+          "I'd like to book an appointment for next week.",
+          "Do you have any availability on Thursday?",
+          "I have a billing complaint I need help with.",
+        ];
+        const text = texts[Math.floor(Math.random() * texts.length)];
+        setPartialCaption(text);
+        setTimeout(() => {
+          pushMessage({ role: "visitor", text });
+          setPartialCaption("");
+          respond(text);
+        }, 500);
+      }, 1800);
+    }
   }, [status, pushMessage, respond]);
 
   const sendTextMessage = useCallback(

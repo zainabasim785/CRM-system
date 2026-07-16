@@ -1,0 +1,25 @@
+# =============================================================================
+# Render Blueprint — AI Reception Agent Backend
+# Deploy on Render.com free tier using this file or the dashboard.
+# =============================================================================
+services:
+  - type: web
+    name: ai-reception-agent-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_CALENDAR_CREDENTIALS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://your-frontend.vercel.app
+      - key: LOG_LEVEL
+        value: INFO
