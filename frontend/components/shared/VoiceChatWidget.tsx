@@ -29,7 +29,16 @@ export function VoiceChatWidget() {
     startListening,
     sendTextMessage,
     toggleMode,
+    speakGreeting,
   } = useVoiceAgent();
+
+  // Speak the greeting aloud when the widget opens in voice mode
+  useEffect(() => {
+    if (open && mode === "voice" && messages.length === 1) {
+      const timer = setTimeout(() => speakGreeting(), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [open, mode, messages.length, speakGreeting]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({

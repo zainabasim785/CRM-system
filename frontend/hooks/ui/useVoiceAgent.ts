@@ -93,6 +93,13 @@ export function useVoiceAgent() {
     [pushMessage]
   );
 
+  const speakGreeting = useCallback(() => {
+    const greeting = messages[0];
+    if (greeting && greeting.role === "agent" && mode === "voice") {
+      speakText(greeting.text, () => {});
+    }
+  }, [messages, mode]);
+
   const startListening = useCallback(() => {
     if (status !== "idle") return;
     setStatus("listening");
@@ -169,5 +176,6 @@ export function useVoiceAgent() {
     startListening,
     sendTextMessage,
     toggleMode,
+    speakGreeting,
   };
 }
