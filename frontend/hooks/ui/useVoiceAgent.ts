@@ -8,6 +8,22 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Speak text using the browser's SpeechSynthesis API */
+function speakText(text: string, onEnd: () => void) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    onEnd();
+    return;
+  }
+  window.speechSynthesis.cancel(); // cancel any previous utterance
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  utterance.rate = 1.05;
+  utterance.pitch = 1.0;
+  utterance.onend = onEnd;
+  utterance.onerror = onEnd;
+  window.speechSynthesis.speak(utterance);
+}
+
 function timestampNow() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -53,16 +69,18 @@ export function useVoiceAgent() {
         // Save conversation ID for follow-ups
         convRef.current = result.conversation_id;
 
-        setStatus(result.requires_escalation ? "escalated" : "speaking");
         pushMessage({ role: "agent", text: result.reply });
 
-        if (resetTimer.current) clearTimeout(resetTimer.current);
-
-        const holdDuration = result.requires_escalation
-          ? 2400
-          : Math.min(3200, 900 + result.reply.length * 22);
-
-        resetTimer.current = setTimeout(() => setStatus("idle"), holdDuration);
+        if (result.requires_escalation) {
+          setStatus("escalated");
+          setTimeout(() => setStatus("idle"), 2400);
+        } else {
+          setStatus("speaking");
+          // Speak the reply aloud using browser TTS
+          speakText(result.reply, () => {
+            setStatus("idle");
+          });
+        }
       } catch (err) {
         console.error("Triage API error:", err);
         pushMessage({
