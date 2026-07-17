@@ -1,0 +1,37 @@
+[
+  {
+    "question": "What are your business hours?",
+    "answer": "We are open Monday–Friday, 9:00 AM–6:00 PM local time. Weekend appointments are available by request.",
+    "keywords": ["hours", "open", "schedule", "when", "time", "business", "closed"]
+  },
+  {
+    "question": "Where are you located?",
+    "answer": "Our main office address is provided after booking confirmation. Remote/video appointments are also available.",
+    "keywords": ["location", "address", "where", "office", "place", "located"]
+  },
+  {
+    "question": "How do I book an appointment?",
+    "answer": "Tell me a preferred date and time, your name, and a contact email. I can check availability and book it for you.",
+    "keywords": ["book", "appointment", "schedule", "meeting", "reserve", "booking"]
+  },
+  {
+    "question": "How can I cancel or reschedule?",
+    "answer": "Share your existing appointment details or confirmation ID and the new preferred time. I can cancel or reschedule for you.",
+    "keywords": ["cancel", "reschedule", "change", "move", "appointment"]
+  },
+  {
+    "question": "How do I speak to a human?",
+    "answer": "I can escalate this conversation to a human receptionist. Please briefly describe what you need help with.",
+    "keywords": ["human", "agent", "person", "speak", "talk", "escalate", "representative", "receptionist"]
+  },
+  {
+    "question": "What services do you offer?",
+    "answer": "We help with appointment booking, cancellations, rescheduling, and common office questions. Ask me anything about hours, location, or scheduling.",
+    "keywords": ["services", "offer", "help", "do", "provide", "support"]
+  },
+  {
+    "question": "Do you accept insurance?",
+    "answer": "Insurance and billing questions are handled by our front desk. I can connect you with a human receptionist for payment details.",
+    "keywords": ["insurance", "billing", "payment", "pay", "cost", "price", "fee"]
+  }
+]
