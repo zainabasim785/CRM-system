@@ -1,59 +1,119 @@
-// =============================================================================
-// API endpoint types — matches FastAPI backend routes
-// =============================================================================
+/** Types matching backend app/schemas exactly — no invented fields. */
 
-/** Common response wrapper */
-export interface ApiResponse<T> {
+export type IntentType =
+  | "faq"
+  | "booking"
+  | "cancel"
+  | "reschedule"
+  | "availability"
+  | "escalate"
+  | "general"
+  | "follow_up";
+
+export interface ConversationMessage {
+  role: string;
+  content: string;
+}
+
+export interface AgentRequest {
+  message: string;
+  session_id?: string | null;
+  user_id?: string | null;
+  conversation_history?: ConversationMessage[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface TriageResult {
+  intent: IntentType;
+  confidence: number;
+  response: string;
+  needs_escalation: boolean;
+  escalate_reason?: string | null;
+  faq_matched: boolean;
+  raw_output?: string | null;
+}
+
+export interface BookingResult {
   success: boolean;
-  data: T;
-  error?: string;
+  action?: string | null;
+  response: string;
+  appointment_details: Record<string, unknown>;
+  raw_output?: string | null;
 }
 
-/** Triage endpoint: POST /api/triage */
-export interface TriageRequest {
-  message: string;
-  conversation_id?: string;
+export interface FollowUpResult {
+  logged: boolean;
+  summary: string;
+  reminder_scheduled: boolean;
+  reminder_details: Record<string, unknown>;
+  raw_output?: string | null;
 }
 
-export interface TriageResponse {
-  intent: "hours" | "availability" | "booking" | "general" | "escalate";
+export interface AgentResponse {
+  session_id?: string | null;
+  intent: IntentType;
   reply: string;
-  requires_escalation: boolean;
-  conversation_id: string;
+  needs_escalation: boolean;
+  escalate_reason?: string | null;
+  triage?: TriageResult | null;
+  booking?: BookingResult | null;
+  follow_up?: FollowUpResult | null;
+  metadata?: Record<string, unknown>;
 }
 
-/** Booking endpoint: POST /api/booking */
-export interface BookingRequest {
-  date: string;          // "YYYY-MM-DD"
-  time?: string;         // "HH:MM"
-  name: string;
+export interface LoginRequest {
   email: string;
-  phone?: string;
-  notes?: string;
+  password: string;
 }
 
-export interface BookingResponse {
-  confirmed: boolean;
-  appointment_id?: string;
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  full_name?: string | null;
+  phone?: string | null;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface UserRead {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  phone?: string | null;
+  role: "admin" | "receptionist" | "customer";
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  google_calendar_connected: boolean;
+}
+
+export interface RegisterResponse {
+  user: UserRead;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface CalendarConnectResponse {
+  authorization_url: string;
+}
+
+export interface CalendarStatusResponse {
+  connected: boolean;
+  google_oauth_configured: boolean;
+  token_expiry?: string | null;
+}
+
+export interface CalendarDisconnectResponse {
+  connected: boolean;
   message: string;
 }
 
-/** Availability endpoint: GET /api/availability */
-export interface AvailabilityQuery {
-  date?: string;         // "YYYY-MM-DD"
-}
-
-export interface AvailabilityResponse {
-  slots: { date: string; time: string; available: boolean }[];
-}
-
-/** Follow-up endpoint: POST /api/follow-up */
-export interface FollowUpRequest {
-  conversation_id: string;
-  message: string;
-}
-
-export interface FollowUpResponse {
-  reply: string;
-  requires_escalation: boolean;
+export interface HealthResponse {
+  status: string;
+  environment: string;
 }

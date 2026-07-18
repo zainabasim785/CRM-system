@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 DEFAULT_FAQ_PATH = Path(__file__).resolve().parent.parent / "data" / "faqs.json"
+
+
+def _contains_whole_word(haystack: str, needle: str) -> bool:
+    """True when `needle` appears as a whole word (not a substring of another word)."""
+    if not needle:
+        return False
+    return re.search(rf"\b{re.escape(needle)}\b", haystack) is not None
 
 
 class FaqService:
@@ -86,11 +94,14 @@ class FaqService:
         best_score = 0
 
         for entry in self.load():
-            score = sum(1 for keyword in entry["keywords"] if keyword in normalized)
+            # Whole-word matches only — avoid "book" matching inside "booking".
+            score = sum(
+                1 for keyword in entry["keywords"] if _contains_whole_word(normalized, keyword)
+            )
             score += sum(
                 1
                 for token in entry["question"].lower().split()
-                if len(token) > 3 and token in normalized
+                if len(token) > 3 and _contains_whole_word(normalized, token)
             )
             if score > best_score:
                 best_score = score
