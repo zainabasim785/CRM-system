@@ -18,7 +18,7 @@ from app.core.config import get_settings
 def get_groq_llm(
     *,
     temperature: float = 0.2,
-    max_tokens: int = 2048,
+    max_tokens: int = 1024,
 ) -> LLM:
     """Build a Groq-backed CrewAI LLM from application settings."""
     settings = get_settings()

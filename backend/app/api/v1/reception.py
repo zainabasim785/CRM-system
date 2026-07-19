@@ -48,7 +48,13 @@ def post_message(
         ) from exc
     except Exception as exc:
         logger.exception("Reception message handling failed")
+        detail = "Reception agents failed to process the message"
+        err_text = str(exc)
+        if "rate_limit" in err_text.lower() or "RateLimitError" in type(exc).__name__:
+            detail = (
+                "The AI provider is rate-limited. Wait ~30 seconds and try again."
+            )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Reception agents failed to process the message",
+            detail=detail,
         ) from exc

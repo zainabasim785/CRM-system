@@ -38,7 +38,7 @@ def create_booking_agent(llm: LLM, *, verbose: bool = False) -> Agent:
         tools=get_booking_tools(),
         verbose=verbose,
         allow_delegation=False,
-        max_iter=8,
+        max_iter=5,
     )
 
 
@@ -70,10 +70,15 @@ def build_booking_task(
             "5. For reschedules: call reschedule_appointment with appointment_id "
             "(preferred) or event_id, plus new_start and new_end. If unavailable, "
             "offer alternative_slots. On success, confirm the new date/time.\n"
-            "6. Datetimes must be ISO-8601. If critical details are missing, ask "
-            "for them instead of calling tools.\n"
+            "6. Datetimes must be ISO-8601 when calling tools. Correct obvious typos "
+            "(e.g. 'jluy' → July). Reuse name/date/time already in the history or "
+            "latest message — do not re-ask for details the visitor already gave. "
+            "Only ask for fields that are truly missing (especially a concrete time "
+            "and email if needed).\n"
             "7. Put appointment_id, event_id, starts_at, and ends_at from the tool "
-            "into appointment_details when available.\n\n"
+            "into appointment_details when available.\n"
+            "8. Put the visitor's name in the appointment summary when known "
+            "(e.g. 'Appointment — Julia').\n\n"
             "Return ONLY valid JSON with this shape:\n"
             "{\n"
             '  "success": true,\n'
