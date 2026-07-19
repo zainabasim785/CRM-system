@@ -1,4 +1,13 @@
-# Render Blueprint — AI Reception Agent Backend
+# Render Blueprint — AI Reception Agent Backend + Postgres
+# Dashboard: New → Blueprint → connect this repo → select this file
+# Or: New → Web Service with rootDir backend
+
+databases:
+  - name: reception-agent-db
+    plan: free
+    databaseName: reception_agent
+    user: reception
+
 services:
   - type: web
     name: ai-reception-agent-backend
@@ -7,19 +16,36 @@ services:
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: API_V1_PREFIX
+        value: /api/v1
+      - key: CORS_ORIGINS
+        value: https://crm-system-orcin.vercel.app,http://localhost:3000,http://127.0.0.1:3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: reception-agent-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
       - key: GROQ_API_KEY
         sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: DATABASE_URL
+      - key: GOOGLE_REDIRECT_URI
         sync: false
-      - key: SECRET_KEY
-        sync: false
-      - key: CORS_ORIGINS
-        value: http://localhost:3000,https://your-frontend.vercel.app
-      - key: APP_ENV
-        value: production
+      - key: GOOGLE_SCOPES
+        value: https://www.googleapis.com/auth/calendar
+      - key: PYTHON_VERSION
+        value: "3.12.8"
