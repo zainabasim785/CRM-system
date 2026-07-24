@@ -1,6 +1,5 @@
 # Render Blueprint — AI Reception Agent Backend + Postgres
-# Dashboard: New → Blueprint → connect this repo → select this file
-# Or: New → Web Service with rootDir backend
+# Dashboard: New → Blueprint → connect repo → branch feature/backend-fastapi
 
 databases:
   - name: reception-agent-db
