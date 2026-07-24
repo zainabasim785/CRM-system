@@ -95,7 +95,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 initial={{ opacity: 0, y: 12, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                transition={{ duration: 0.2, ease: "easeOut" as const }}
                 className={cn(
                   "pointer-events-auto w-full rounded-xl border bg-card p-3 shadow-soft",
                   item.variant === "success" && "border-emerald-500/30",

@@ -157,7 +157,7 @@ function ChatPreview() {
                 key={msg.text}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.35 + i * 0.2, ease: "easeOut" }}
+                transition={{ duration: 0.35, delay: 0.35 + i * 0.2, ease: "easeOut" as const }}
                 className={msg.from === "visitor" ? "flex justify-end" : "flex flex-col items-start gap-1.5"}
               >
                 <p
