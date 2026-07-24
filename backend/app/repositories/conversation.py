@@ -72,3 +72,19 @@ class ConversationRepository(BaseRepository[Conversation]):
             .limit(limit)
         )
         return list(self.db.scalars(stmt).all())
+
+    def list_by_status(
+        self,
+        status: ConversationStatus,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Conversation]:
+        stmt = (
+            select(Conversation)
+            .where(Conversation.status == status)
+            .order_by(Conversation.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all())

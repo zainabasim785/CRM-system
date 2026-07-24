@@ -67,6 +67,16 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",
     )
 
+    @field_validator("database_url")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Render/Heroku often give postgres:// — SQLAlchemy needs postgresql+psycopg2://."""
+        if value.startswith("postgres://"):
+            return "postgresql+psycopg2://" + value[len("postgres://") :]
+        if value.startswith("postgresql://") and "+psycopg2" not in value:
+            return "postgresql+psycopg2://" + value[len("postgresql://") :]
+        return value
+
     @field_validator("secret_key")
     @classmethod
     def secret_key_must_not_be_placeholder(cls, value: str) -> str:

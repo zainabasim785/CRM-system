@@ -13,6 +13,8 @@ import json
 import logging
 import re
 import time
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from uuid import uuid4
 
 from crewai import Crew, Process
@@ -59,6 +61,14 @@ _CANCEL_REQUEST = re.compile(r"\b(cancel|cancellation)\b", re.IGNORECASE)
 _RESCHEDULE_REQUEST = re.compile(r"\b(reschedule|move\s+(my|the)\s+appointment)\b", re.IGNORECASE)
 
 
+def _looks_like_cancel_or_reschedule(message: str) -> bool:
+    if re.search(r"\b(book|booking|schedule|reserve)\b", message or "", re.IGNORECASE):
+        return False
+    return bool(
+        re.search(r"\b(cancel|reschedule|cancellation)\b", message or "", re.IGNORECASE)
+    )
+
+
 def _scheduling_intent(message: str) -> IntentType | None:
     """Map clear scheduling language to an intent without calling triage LLM."""
     if not _SCHEDULING_REQUEST.search(message or ""):
@@ -83,12 +93,22 @@ def _is_rate_limit_error(exc: BaseException) -> bool:
     return "ratelimit" in name or any(marker in text for marker in _RATE_LIMIT_MARKERS)
 
 
+def _silence_crewai_console() -> None:
+    from app.crewai_console import silence_crewai_console
+
+    silence_crewai_console()
+
+
 def _kickoff_with_retry(crew: Crew, *, attempts: int = 3) -> object:
     """Run crew.kickoff with short backoff on Groq TPM rate limits."""
     last_exc: BaseException | None = None
+    # Rich writes directly to stdout; swallow console output during API requests.
+    console_sink = StringIO()
     for attempt in range(1, attempts + 1):
         try:
-            return crew.kickoff()
+            _silence_crewai_console()
+            with redirect_stdout(console_sink), redirect_stderr(console_sink):
+                return crew.kickoff()
         except Exception as exc:
             last_exc = exc
             if not _is_rate_limit_error(exc) or attempt >= attempts:
@@ -116,7 +136,8 @@ class AgentManager:
         faq_service: FaqService | None = None,
     ) -> None:
         settings = get_settings()
-        self.verbose = settings.debug if verbose is None else verbose
+        # CrewAI verbose mode prints emoji via Rich; that crashes on Windows cp1252 consoles.
+        self.verbose = False if verbose is None else verbose
         self.faq = faq_service or get_faq_service()
         self._settings = settings
         self._llm = None
@@ -260,7 +281,7 @@ class AgentManager:
             agents=[self.triage_agent],
             tasks=[task],
             process=Process.sequential,
-            verbose=self.verbose,
+            verbose=False,
             memory=False,
         )
         raw_text = crew_output_to_text(_kickoff_with_retry(crew))
@@ -283,7 +304,20 @@ class AgentManager:
         intent: str,
         history_blob: str,
     ) -> BookingResult:
-        # Prefer a single small LLM call + AppointmentService (avoids CrewAI TPM blowups).
+        # Prefer lightweight paths (single Groq call) over CrewAI on free tier.
+        if intent in {IntentType.CANCEL.value, IntentType.RESCHEDULE.value, "cancel", "reschedule"} or _looks_like_cancel_or_reschedule(message):
+            try:
+                from app.agents.lightweight_booking import run_lightweight_cancel_reschedule
+
+                return run_lightweight_cancel_reschedule(
+                    message=message,
+                    intent=intent,
+                    history_blob=history_blob,
+                )
+            except Exception:
+                logger.exception(
+                    "Lightweight cancel/reschedule failed; falling back to CrewAI"
+                )
         if intent in {IntentType.BOOKING.value, IntentType.AVAILABILITY.value, "booking", "availability"}:
             try:
                 from app.agents.lightweight_booking import run_lightweight_booking
@@ -303,7 +337,7 @@ class AgentManager:
             agents=[self.booking_agent],
             tasks=[task],
             process=Process.sequential,
-            verbose=self.verbose,
+            verbose=False,
             memory=False,
         )
         raw_text = crew_output_to_text(_kickoff_with_retry(crew))
@@ -343,7 +377,7 @@ class AgentManager:
             agents=[self.followup_agent],
             tasks=[task],
             process=Process.sequential,
-            verbose=self.verbose,
+            verbose=False,
             memory=False,
         )
 
@@ -405,5 +439,11 @@ def get_agent_manager() -> AgentManager:
     """Lazy singleton used by API / worker layers later."""
     global _manager
     if _manager is None:
-        _manager = AgentManager()
+        _manager = AgentManager(verbose=False)
     return _manager
+
+
+def reset_agent_manager() -> None:
+    """Clear cached manager (e.g. after settings change in dev)."""
+    global _manager
+    _manager = None

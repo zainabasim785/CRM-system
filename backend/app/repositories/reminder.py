@@ -61,3 +61,18 @@ class ReminderRepository(BaseRepository[Reminder]):
 
     def mark_status(self, reminder: Reminder, status: ReminderStatus) -> Reminder:
         return self.update(reminder, status=status)
+
+    def list_scheduled(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Reminder]:
+        stmt = (
+            select(Reminder)
+            .where(Reminder.status == ReminderStatus.SCHEDULED)
+            .order_by(Reminder.remind_at.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all())

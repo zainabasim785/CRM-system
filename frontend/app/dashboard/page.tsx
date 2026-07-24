@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { AccountCard } from "@/components/dashboard/account-card";
 import { ApiStatusCard } from "@/components/dashboard/api-status-card";
+import { AppointmentsPanel } from "@/components/dashboard/appointments-panel";
 import { CalendarPanel } from "@/components/dashboard/calendar-panel";
+import { InboxPanel } from "@/components/dashboard/inbox-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +39,10 @@ export default function DashboardPage() {
         <ApiStatusCard />
       </div>
 
+      <AppointmentsPanel upcomingOnly compact />
+
+      <InboxPanel compact />
+
       <Card>
         <CardHeader>
           <CardTitle>Quick actions</CardTitle>
@@ -50,6 +56,12 @@ export default function DashboardPage() {
           </Button>
           <Button variant="outline" asChild>
             <Link href="/history">View history</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/appointments">All appointments</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/inbox">Staff inbox</Link>
           </Button>
         </CardContent>
       </Card>

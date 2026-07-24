@@ -65,7 +65,19 @@ def _looks_like_cancel_or_reschedule(message: str) -> bool:
     )
 
 
-def _chat_json(user_prompt: str, *, attempts: int = 3) -> dict[str, Any]:
+_CANCEL_SYSTEM = (
+    "You extract cancel/reschedule appointment details. Reply with ONLY JSON. "
+    "Use action: cancel, reschedule, list, or clarify. "
+    "Include attendee_email when mentioned. Use ISO-8601 for new_start/new_end when rescheduling."
+)
+
+
+def _chat_json_with_system(
+    user_prompt: str,
+    system: str,
+    *,
+    attempts: int = 3,
+) -> dict[str, Any]:
     settings = get_settings()
     if not settings.groq_api_key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
@@ -80,7 +92,7 @@ def _chat_json(user_prompt: str, *, attempts: int = 3) -> dict[str, Any]:
                 temperature=0.1,
                 max_tokens=400,
                 messages=[
-                    {"role": "system", "content": _EXTRACT_SYSTEM},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": user_prompt},
                 ],
             )
@@ -92,7 +104,7 @@ def _chat_json(user_prompt: str, *, attempts: int = 3) -> dict[str, Any]:
                 raise
             wait_s = _wait_seconds_from_error(exc, default=12.0 * attempt)
             logger.warning(
-                "Groq rate limit on lightweight booking (attempt %s/%s); sleep %.1fs",
+                "Groq rate limit (attempt %s/%s); sleep %.1fs",
                 attempt,
                 attempts,
                 wait_s,
@@ -100,6 +112,190 @@ def _chat_json(user_prompt: str, *, attempts: int = 3) -> dict[str, Any]:
             time.sleep(wait_s)
     assert last_exc is not None
     raise last_exc
+
+
+def _chat_json(user_prompt: str, *, attempts: int = 3) -> dict[str, Any]:
+    return _chat_json_with_system(user_prompt, _EXTRACT_SYSTEM, attempts=attempts)
+
+
+def _pick_appointment(
+    appointments: list[dict[str, Any]],
+    *,
+    appointment_id: str | None,
+    attendee_email: str | None,
+) -> dict[str, Any] | None:
+    if appointment_id:
+        for row in appointments:
+            if row.get("appointment_id") == appointment_id:
+                return row
+    if attendee_email:
+        matches = [
+            row
+            for row in appointments
+            if (row.get("attendee_email") or "").lower() == attendee_email.lower()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+    if len(appointments) == 1:
+        return appointments[0]
+    return None
+
+
+def run_lightweight_cancel_reschedule(
+    *,
+    message: str,
+    intent: str,
+    history_blob: str,
+) -> BookingResult:
+    """Parse cancel/reschedule with one Groq call, then update via AppointmentService."""
+    intent_norm = (intent or "cancel").lower().strip()
+    if intent_norm not in {"cancel", "reschedule"}:
+        if "reschedule" in (message or "").lower():
+            intent_norm = "reschedule"
+        else:
+            intent_norm = "cancel"
+
+    today = datetime.now(UTC).date().isoformat()
+    prompt = (
+        f"Today (UTC): {today}\n"
+        f"Intent hint: {intent_norm}\n"
+        f"History:\n{history_blob or '(none)'}\n\n"
+        f"Latest message:\n{message}\n\n"
+        "Return JSON:\n"
+        '  "action": "cancel"|"reschedule"|"list"|"clarify",\n'
+        '  "attendee_email": "email or null",\n'
+        '  "appointment_id": "uuid or null",\n'
+        '  "new_start": "ISO-8601 or null",\n'
+        '  "new_end": "ISO-8601 or null",\n'
+        '  "response": "short clarify message if action=clarify"\n'
+    )
+    payload = _chat_json_with_system(prompt, _CANCEL_SYSTEM)
+    action = str(payload.get("action") or intent_norm).lower().strip()
+    email = payload.get("attendee_email")
+    appointment_id = payload.get("appointment_id")
+
+    with appointment_service_session() as service:
+        listing = service.list_appointments(
+            attendee_email=str(email) if email else None,
+            limit=10,
+        )
+        appointments = listing.get("appointments") or []
+
+        if action == "list" or (action == "clarify" and appointments):
+            if not appointments:
+                return BookingResult(
+                    success=False,
+                    action="clarify",
+                    response=(
+                        "I couldn't find upcoming appointments. "
+                        "Share the email used when booking."
+                    ),
+                    appointment_details={},
+                    raw_output=json.dumps(payload),
+                )
+            lines = "\n".join(
+                f"- {a.get('label')} ({a.get('attendee_email') or 'no email'})"
+                for a in appointments[:5]
+            )
+            return BookingResult(
+                success=False,
+                action="list",
+                response=(
+                    "Here are upcoming appointments:\n"
+                    f"{lines}\n\n"
+                    "Reply with which to cancel or reschedule and the new time if moving."
+                ),
+                appointment_details={"appointments": appointments},
+                raw_output=json.dumps(payload),
+            )
+
+        if action == "clarify":
+            clarify = str(payload.get("response") or "").strip()
+            if not clarify:
+                clarify = (
+                    "To cancel or reschedule, tell me the email on the booking "
+                    "and the date/time (example: cancel julia@example.com on July 31 at 3pm)."
+                )
+            return BookingResult(
+                success=False,
+                action="clarify",
+                response=clarify,
+                appointment_details={},
+                raw_output=json.dumps(payload),
+            )
+
+        target = _pick_appointment(
+            appointments,
+            appointment_id=str(appointment_id) if appointment_id else None,
+            attendee_email=str(email) if email else None,
+        )
+        if target is None:
+            hint = listing.get("message") or "No matching appointment found."
+            return BookingResult(
+                success=False,
+                action="clarify",
+                response=(
+                    f"{hint} "
+                    "Include the attendee email or pick from your upcoming appointments."
+                ),
+                appointment_details={"appointments": appointments},
+                raw_output=json.dumps(payload),
+            )
+
+        appt_id = target.get("appointment_id")
+        if action == "cancel":
+            result = service.cancel_appointment(appointment_id=appt_id)
+        else:
+            new_start = payload.get("new_start")
+            new_end = payload.get("new_end")
+            if not new_start:
+                return BookingResult(
+                    success=False,
+                    action="clarify",
+                    response=(
+                        f"Found “{target.get('summary')}”. "
+                        "What new date and time would you like?"
+                    ),
+                    appointment_details={"appointment": target},
+                    raw_output=json.dumps(payload),
+                )
+            if not new_end:
+                try:
+                    start_dt = datetime.fromisoformat(str(new_start).replace("Z", "+00:00"))
+                    new_end = (start_dt + timedelta(hours=1)).isoformat()
+                except ValueError:
+                    return BookingResult(
+                        success=False,
+                        action="clarify",
+                        response="I couldn't parse the new time. Try “July 31 at 4pm”.",
+                        appointment_details={},
+                        raw_output=json.dumps(payload),
+                    )
+            result = service.reschedule_appointment(
+                appointment_id=appt_id,
+                new_start=str(new_start),
+                new_end=str(new_end),
+            )
+
+    success = bool(result.get("success"))
+    response = str(result.get("message") or result.get("confirmation") or "")
+    return BookingResult(
+        success=success,
+        action=action,
+        response=response or ("Done." if success else "Could not complete that request."),
+        appointment_details={
+            k: result.get(k)
+            for k in (
+                "appointment_id",
+                "event_id",
+                "starts_at",
+                "ends_at",
+                "status",
+            )
+            if result.get(k) is not None
+        },
+        raw_output=json.dumps({"extract": payload, "result": result}, default=str),
+    )
 
 
 def run_lightweight_booking(
@@ -120,15 +316,12 @@ def run_lightweight_booking(
         "cancel",
         "reschedule",
     }:
-        return BookingResult(
-            success=False,
-            action="clarify",
-            response=(
-                "To cancel or reschedule, tell me the appointment time and email "
-                "(example: cancel Julia's appointment on July 31 at 3pm)."
-            ),
-            appointment_details={},
-            raw_output=None,
+        from app.agents.lightweight_booking import run_lightweight_cancel_reschedule
+
+        return run_lightweight_cancel_reschedule(
+            message=message,
+            intent=intent_norm,
+            history_blob=history_blob,
         )
 
     today = datetime.now(UTC).date().isoformat()
