@@ -91,7 +91,45 @@
     mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black, transparent);
   }
 
+  .hero-grid {
+    background-image:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image:
+      linear-gradient(to bottom, transparent 0%, black 18%, black 72%, transparent 100%),
+      radial-gradient(ellipse 95% 80% at 50% 20%, black, transparent 75%);
+    mask-composite: intersect;
+  }
+
+  @supports not (mask-composite: intersect) {
+    .hero-grid {
+      mask-image: radial-gradient(ellipse 95% 80% at 50% 20%, black 25%, transparent 75%);
+    }
+  }
+
   .text-balance {
     text-wrap: balance;
+  }
+
+  .hero-spotlight {
+    background:
+      radial-gradient(ellipse 130% 95% at 50% -28%, hsl(38 92% 50% / 0.24), transparent 68%),
+      radial-gradient(ellipse 60% 50% at 92% 8%, hsl(24 95% 53% / 0.16), transparent 58%),
+      radial-gradient(ellipse 55% 45% at 4% 18%, hsl(38 92% 50% / 0.12), transparent 52%);
+    mask-image: linear-gradient(to bottom, black 0%, black 78%, transparent 100%);
+  }
+
+  .dark .hero-spotlight {
+    background:
+      radial-gradient(ellipse 130% 95% at 50% -28%, hsl(38 92% 50% / 0.2), transparent 68%),
+      radial-gradient(ellipse 60% 50% at 92% 8%, hsl(24 95% 53% / 0.12), transparent 58%),
+      radial-gradient(ellipse 55% 45% at 4% 18%, hsl(38 92% 50% / 0.1), transparent 52%);
+    mask-image: linear-gradient(to bottom, black 0%, black 78%, transparent 100%);
+  }
+
+  .glass-panel {
+    background: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(16px);
   }
 }

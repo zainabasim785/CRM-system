@@ -24,6 +24,8 @@ export function SiteHeader() {
   const { theme, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
 
+  const isHome = pathname === "/";
+
   const handleLogout = () => {
     logout();
     setOpen(false);
@@ -31,7 +33,14 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/75 backdrop-blur-xl">
+    <header
+      className={cn(
+        "sticky top-0 z-40 backdrop-blur-xl",
+        isHome
+          ? "border-b border-border/20 bg-background/40"
+          : "border-b border-border/70 bg-background/75",
+      )}
+    >
       <div className="container flex h-14 items-center justify-between">
         <Link
           href="/"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import and_, select
 
@@ -52,6 +52,41 @@ class AppointmentRepository(BaseRepository[Appointment]):
             select(Appointment)
             .where(Appointment.user_id == user_id)
             .order_by(Appointment.starts_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all())
+
+    def list_accessible(
+        self,
+        *,
+        user_id: uuid.UUID | None = None,
+        attendee_email: str | None = None,
+        staff_view: bool = False,
+        skip: int = 0,
+        limit: int = 100,
+        upcoming_only: bool = False,
+    ) -> list[Appointment]:
+        """List appointments for dashboard — staff see all; customers see their own."""
+        stmt = select(Appointment)
+        if not staff_view:
+            filters = []
+            if user_id is not None:
+                filters.append(Appointment.user_id == user_id)
+            if attendee_email:
+                filters.append(
+                    Appointment.attendee_email == attendee_email.lower()
+                )
+            if filters:
+                from sqlalchemy import or_
+
+                stmt = stmt.where(or_(*filters))
+            else:
+                return []
+        if upcoming_only:
+            stmt = stmt.where(Appointment.starts_at >= datetime.now(UTC))
+        stmt = (
+            stmt.order_by(Appointment.starts_at.asc() if upcoming_only else Appointment.starts_at.desc())
             .offset(skip)
             .limit(limit)
         )

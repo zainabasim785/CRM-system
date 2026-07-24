@@ -4,7 +4,19 @@ Application entrypoint.
 Creates the FastAPI app instance and mounts versioned API routers.
 """
 
+import sys
+
 from contextlib import asynccontextmanager
+
+# CrewAI/Rich emit emoji in logs; Windows cp1252 stdout raises UnicodeEncodeError without this.
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+from app.crewai_console import silence_crewai_console
+
+silence_crewai_console()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

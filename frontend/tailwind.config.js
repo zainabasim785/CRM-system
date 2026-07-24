@@ -75,10 +75,28 @@ module.exports = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        "mesh-drift": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(28px, -18px) scale(1.06)" },
+          "66%": { transform: "translate(-18px, 14px) scale(0.96)" },
+        },
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.4s ease-out",
         shimmer: "shimmer 1.5s infinite",
+        "mesh-drift": "mesh-drift 14s ease-in-out infinite",
+        "mesh-drift-slow": "mesh-drift 20s ease-in-out infinite reverse",
+        marquee: "marquee 32s linear infinite",
+        float: "float 5s ease-in-out infinite",
+        "float-delayed": "float 5s ease-in-out 1.2s infinite",
       },
     },
   },

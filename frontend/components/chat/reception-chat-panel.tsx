@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatQuickActions } from "@/components/chat/quick-actions";
 import { useReceptionChat } from "@/hooks/use-reception-chat";
 import { speakText, stopSpeaking, useVoiceInput } from "@/hooks/use-voice";
 import { useToast } from "@/components/ui/toast";
@@ -42,6 +43,8 @@ export function ReceptionChatPanel({
       }
       if (result.booking?.success) {
         toast.success("Booking updated", result.booking.response || result.reply);
+      } else if (result.needs_escalation) {
+        toast.info("Escalated", "A staff member will follow up on this conversation.");
       }
       if (speakReplies && result.reply) {
         await speakText(result.reply);
@@ -111,6 +114,7 @@ export function ReceptionChatPanel({
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
         <MessageList messages={messages} pending={pending} />
+        <ChatQuickActions disabled={pending} onSelect={(msg) => void handleSend(msg)} />
         <ChatComposer
           disabled={pending}
           onSend={(msg) => void handleSend(msg)}
