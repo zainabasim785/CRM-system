@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { History, Plus, Volume2, VolumeX } from "lucide-react";
@@ -16,7 +16,7 @@ import { MessageList } from "@/components/chat/message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatQuickActions } from "@/components/chat/quick-actions";
 import { useReceptionChat } from "@/hooks/use-reception-chat";
-import { speakText, stopSpeaking, useVoiceInput } from "@/hooks/use-voice";
+import { speakText, stopSpeaking, useVoiceInput, primeSpeech, preloadSpeech, isSpeechSupported } from "@/hooks/use-voice";
 import { useToast } from "@/components/ui/toast";
 
 export function ReceptionChatPanel({
@@ -30,12 +30,27 @@ export function ReceptionChatPanel({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const [speakReplies, setSpeakReplies] = useState(false);
+  const [speakReplies, setSpeakReplies] = useState(true);
+  const speakRepliesRef = useRef(speakReplies);
+  speakRepliesRef.current = speakReplies;
+
+  const onAssistantReply = useCallback((reply: string) => {
+    if (!speakRepliesRef.current || !reply) return;
+    primeSpeech();
+    speakText(reply);
+  }, []);
+
   const { messages, pending, error, send, sessionId, startNewConversation } =
-    useReceptionChat({ resumeSessionId });
+    useReceptionChat({ resumeSessionId, onAssistantReply });
+
+  useEffect(() => {
+    preloadSpeech();
+    primeSpeech();
+  }, []);
 
   const handleSend = useCallback(
     async (text: string) => {
+      if (speakReplies) primeSpeech();
       const result = await send(text);
       if (!result) {
         toast.error("Message failed", "The reception API could not process that request.");
@@ -46,9 +61,6 @@ export function ReceptionChatPanel({
       } else if (result.needs_escalation) {
         toast.info("Escalated", "A staff member will follow up on this conversation.");
       }
-      if (speakReplies && result.reply) {
-        await speakText(result.reply);
-      }
     },
     [send, speakReplies, toast]
   );
@@ -58,8 +70,14 @@ export function ReceptionChatPanel({
   });
 
   const toggleSpeak = () => {
-    if (speakReplies) stopSpeaking();
-    setSpeakReplies((v) => !v);
+    if (speakReplies) {
+      stopSpeaking();
+      setSpeakReplies(false);
+      return;
+    }
+    setSpeakReplies(true);
+    primeSpeech();
+    void speakText("Voice replies are on.");
   };
 
   const handleNewChat = () => {
@@ -111,9 +129,24 @@ export function ReceptionChatPanel({
             {error}
           </p>
         )}
+        {voice.error && (
+          <p className="mt-2 text-sm text-amber-800 dark:text-amber-300" role="alert">
+            {voice.error}
+          </p>
+        )}
+        {!voice.supported && isSpeechSupported() && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Mic needs Chrome or Edge. Replies can be read aloud — use <strong>Listen</strong> on each message if auto-play is silent.
+          </p>
+        )}
+        {!isSpeechSupported() && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Read-aloud is not supported in this browser. Try Chrome on desktop.
+          </p>
+        )}
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
-        <MessageList messages={messages} pending={pending} />
+        <MessageList messages={messages} pending={pending} onSpeak={(text) => void speakText(text)} />
         <ChatQuickActions disabled={pending} onSelect={(msg) => void handleSend(msg)} />
         <ChatComposer
           disabled={pending}

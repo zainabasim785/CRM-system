@@ -21,6 +21,18 @@ type SpeechRecognitionLike = {
   onend: (() => void) | null;
 };
 
+let cachedVoice: SpeechSynthesisVoice | null = null;
+let voicesReady = false;
+
+function preloadVoices(): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length) {
+    resolveVoice(voices);
+    voicesReady = true;
+  }
+}
+
 function getRecognition(): SpeechRecognitionLike | null {
   if (typeof window === "undefined") return null;
   const w = window as unknown as {
@@ -31,40 +43,43 @@ function getRecognition(): SpeechRecognitionLike | null {
   return Ctor ? new Ctor() : null;
 }
 
-/** Prefer calm, natural English voices; avoid novelty / robotic defaults. */
-function pickNaturalVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    return null;
+function scoreVoice(voice: SpeechSynthesisVoice): number {
+  const name = voice.name.toLowerCase();
+  let score = 0;
+
+  if (/neural|natural|online|premium|enhanced/i.test(name)) score += 120;
+  if (/microsoft (jenny|aria|sonia|libby|natasha|emma)/i.test(name)) score += 90;
+  if (/google.*english.*(female|male|us|uk)/i.test(name)) score += 70;
+  if (/samantha|karen|moira|daniel|fiona|tessa|veena/i.test(name)) score += 60;
+  if (/en-us|en-gb/i.test(voice.lang)) score += 20;
+  if (voice.localService && /natural|neural/i.test(name)) score += 15;
+
+  // Old/default voices that sound robotic on Windows.
+  if (/zira|david desktop|mark|helen|richard|james|linda|george|robot|compact|espeak|sapi/i.test(name)) {
+    score -= 100;
   }
-  const voices = window.speechSynthesis.getVoices();
+  if (/microsoft david|microsoft zira|microsoft mark/i.test(name)) score -= 80;
+
+  return score;
+}
+
+/** Pick the most natural-sounding English voice available on this device. */
+function pickNaturalVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (!voices.length) return null;
 
   const english = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
   const pool = english.length ? english : voices;
 
-  const preferred = [
-    /samantha/i,
-    /karen/i,
-    /moira/i,
-    /aria/i,
-    /jenny/i,
-    /google us english/i,
-    /microsoft aria/i,
-    /microsoft jenny/i,
-    /natural/i,
-    /enhanced/i,
-  ];
+  const ranked = [...pool].sort((a, b) => scoreVoice(b) - scoreVoice(a));
+  return ranked[0] ?? null;
+}
 
-  for (const pattern of preferred) {
-    const match = pool.find((v) => pattern.test(v.name));
-    if (match) return match;
+function resolveVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (cachedVoice && voices.some((v) => v.name === cachedVoice!.name)) {
+    return cachedVoice;
   }
-
-  // Prefer local high-quality voices over remote novelty ones
-  const local = pool.find((v) => v.localService && /en-?us/i.test(v.lang));
-  if (local) return local;
-
-  return pool.find((v) => /en-?us/i.test(v.lang)) || pool[0] || null;
+  cachedVoice = pickNaturalVoice(voices);
+  return cachedVoice;
 }
 
 /** Strip markdown / symbols that sound weird when spoken. */
@@ -74,8 +89,23 @@ export function cleanForSpeech(text: string): string {
     .replace(/`([^`]+)`/g, "$1")
     .replace(/[*_#~>]+/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\b(API|URL|OAuth|CRM)\b/gi, (_, word: string) => word.split("").join(" "))
+    .replace(/(\d{1,2}):(\d{2})\s*(am|pm)?/gi, (_, h, m, ap) => {
+      const suffix = ap ? ` ${ap.toUpperCase()}` : "";
+      return `${h} ${m}${suffix}`;
+    })
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function splitForSpeech(text: string): string[] {
+  // Short replies: one utterance starts instantly (no gap between sentences).
+  if (text.length <= 260) return [text];
+  const parts = text
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length ? parts : [text];
 }
 
 function waitForVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -94,45 +124,129 @@ function waitForVoices(): Promise<SpeechSynthesisVoice[]> {
       resolve(window.speechSynthesis.getVoices());
     };
     window.speechSynthesis.addEventListener("voiceschanged", onChange);
-    // Fallback if event never fires
     setTimeout(() => {
       window.speechSynthesis.removeEventListener("voiceschanged", onChange);
       resolve(window.speechSynthesis.getVoices());
-    }, 500);
+    }, 1200);
   });
 }
 
-export async function speakText(text: string): Promise<void> {
+/** Call on a user click so Chrome/Edge allow speech later. */
+export function primeSpeech(): boolean {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    return;
+    return false;
   }
+  preloadVoices();
+  window.speechSynthesis.resume();
+  return true;
+}
 
-  const cleaned = cleanForSpeech(text);
-  if (!cleaned) return;
+/** Warm up voices as soon as the chat page loads. */
+export function preloadSpeech(): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  preloadVoices();
+  window.speechSynthesis.addEventListener("voiceschanged", preloadVoices, { once: true });
+}
 
-  await waitForVoices();
-  window.speechSynthesis.cancel();
+export function isSpeechSupported(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
 
-  // Chrome sometimes needs a tiny pause after cancel
-  await new Promise((r) => setTimeout(r, 40));
-
+function speakOnce(text: string, voice: SpeechSynthesisVoice | null): Promise<boolean> {
   return new Promise((resolve) => {
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    const voice = pickNaturalVoice();
+    const utterance = new SpeechSynthesisUtterance(text);
     if (voice) {
       utterance.voice = voice;
       utterance.lang = voice.lang || "en-US";
     } else {
       utterance.lang = "en-US";
     }
-    // Calm, natural delivery — avoid fast/high “robot” defaults
-    utterance.rate = 0.92;
+    // Natural but not sluggish.
+    utterance.rate = 1.02;
     utterance.pitch = 1.0;
-    utterance.volume = 0.9;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
+    utterance.volume = 1;
+
+    let finished = false;
+    let started = false;
+    let chromeFix: ReturnType<typeof setInterval> | null = null;
+
+    const finish = (ok: boolean) => {
+      if (finished) return;
+      finished = true;
+      if (chromeFix) clearInterval(chromeFix);
+      resolve(ok && started);
+    };
+
+    utterance.onstart = () => {
+      started = true;
+    };
+    utterance.onend = () => finish(true);
+    utterance.onerror = () => finish(false);
+
+    window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
+
+    chromeFix = setInterval(() => {
+      const synth = window.speechSynthesis;
+      if (!synth.speaking && !synth.pending) {
+        if (chromeFix) clearInterval(chromeFix);
+        return;
+      }
+      synth.resume();
+    }, 250);
+
+    setTimeout(() => {
+      if (!started) finish(false);
+    }, 4000);
   });
+}
+
+function speakNow(text: string, voice: SpeechSynthesisVoice | null): void {
+  const utterance = new SpeechSynthesisUtterance(text);
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang || "en-US";
+  } else {
+    utterance.lang = "en-US";
+  }
+  utterance.rate = 1.02;
+  utterance.pitch = 1.0;
+  utterance.volume = 1;
+  window.speechSynthesis.resume();
+  window.speechSynthesis.speak(utterance);
+}
+
+export function speakText(text: string): Promise<boolean> {
+  if (!isSpeechSupported()) {
+    return Promise.resolve(false);
+  }
+
+  const cleaned = cleanForSpeech(text);
+  if (!cleaned) return Promise.resolve(false);
+
+  preloadVoices();
+  const voice = resolveVoice(window.speechSynthesis.getVoices());
+  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+    window.speechSynthesis.cancel();
+  }
+
+  const chunks = splitForSpeech(cleaned);
+  // Start the first chunk in the same tick as the message appearing.
+  speakNow(chunks[0], voice);
+
+  if (chunks.length === 1) {
+    return Promise.resolve(true);
+  }
+
+  return (async () => {
+    let anyStarted = true;
+    for (let i = 1; i < chunks.length; i++) {
+      await new Promise((r) => setTimeout(r, 60));
+      const ok = await speakOnce(chunks[i], voice);
+      anyStarted = anyStarted || ok;
+    }
+    return anyStarted;
+  })();
 }
 
 export function stopSpeaking(): void {
@@ -145,6 +259,7 @@ export function useVoiceInput(onFinal: (text: string) => void) {
   const [listening, setListening] = useState(false);
   const [partial, setPartial] = useState("");
   const [supported, setSupported] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
@@ -158,7 +273,11 @@ export function useVoiceInput(onFinal: (text: string) => void) {
 
   const start = useCallback(() => {
     const recognition = getRecognition();
-    if (!recognition) return;
+    if (!recognition) {
+      setError("Voice input needs Chrome or Edge.");
+      return;
+    }
+    setError(null);
     stopSpeaking();
     recognitionRef.current = recognition;
     recognition.lang = "en-US";
@@ -184,6 +303,7 @@ export function useVoiceInput(onFinal: (text: string) => void) {
     recognition.onerror = () => {
       setListening(false);
       setPartial("");
+      setError("Microphone blocked or unavailable. Allow mic access in browser settings.");
     };
     recognition.onend = () => {
       setListening(false);
@@ -191,5 +311,5 @@ export function useVoiceInput(onFinal: (text: string) => void) {
     recognition.start();
   }, [onFinal]);
 
-  return { listening, partial, supported, start, stop };
+  return { listening, partial, supported, error, start, stop };
 }

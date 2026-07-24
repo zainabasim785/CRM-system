@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.agents.manager import AgentManager, get_agent_manager
 from app.models.enums import ConversationStatus
 from app.schemas.agent import AgentRequest, AgentResponse, ConversationMessage
+from app.repositories.user import UserRepository
 from app.services.calendar_context import calendar_user_context
 from app.services.conversation_service import ConversationService
 
@@ -61,7 +62,8 @@ class ReceptionService:
             metadata=metadata or {},
         )
 
-        with calendar_user_context(user_id):
+        calendar_user_id = self._resolve_calendar_user_id(user_id)
+        with calendar_user_context(calendar_user_id):
             response = self.agents.handle_message(request)
         self._ensure_conversation_saved(request, response, user_id=user_id)
         return response
@@ -126,3 +128,10 @@ class ReceptionService:
                     status=ConversationStatus.ESCALATED,
                 )
                 self.db.commit()
+
+    def _resolve_calendar_user_id(self, user_id: UUID | None) -> UUID | None:
+        """Visitors are anonymous — use the staff calendar owner when one is linked."""
+        if user_id is not None:
+            return user_id
+        owner = UserRepository(self.db).get_calendar_owner()
+        return owner.id if owner is not None else None

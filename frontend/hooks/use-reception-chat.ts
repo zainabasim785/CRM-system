@@ -43,9 +43,11 @@ const GREETING_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 export function useReceptionChat(options?: {
   initialGreeting?: string;
   resumeSessionId?: string | null;
+  onAssistantReply?: (reply: string) => void;
 }) {
   const greeting = options?.initialGreeting ?? DEFAULT_GREETING;
   const resumeSessionId = options?.resumeSessionId ?? null;
+  const onAssistantReply = options?.onAssistantReply;
 
   const buildGreeting = useCallback(
     (): ChatMessage => ({
@@ -144,6 +146,9 @@ export function useReceptionChat(options?: {
       }
 
       setLastResponse(result);
+      if (result.reply) {
+        onAssistantReply?.(result.reply);
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -174,7 +179,7 @@ export function useReceptionChat(options?: {
       pendingRef.current = false;
       setPending(false);
     }
-  }, []);
+  }, [onAssistantReply]);
 
   return {
     messages,

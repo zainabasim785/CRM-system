@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/chat/history-store";
 import { formatMessageTime } from "@/lib/chat/history-store";
 import { cn } from "@/lib/utils";
@@ -11,10 +13,12 @@ export function MessageList({
   messages,
   pending,
   showTimestamps = true,
+  onSpeak,
 }: {
   messages: ChatMessage[];
   pending?: boolean;
   showTimestamps?: boolean;
+  onSpeak?: (text: string) => void;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +92,19 @@ export function MessageList({
                     <Badge variant="success">booked</Badge>
                   )}
                 </>
+              )}
+              {message.role === "assistant" && onSpeak && message.content && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
+                  onClick={() => onSpeak(message.content)}
+                  aria-label="Listen to reply"
+                >
+                  <Volume2 className="h-3 w-3" aria-hidden />
+                  Listen
+                </Button>
               )}
             </div>
           </div>
