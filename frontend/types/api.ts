@@ -117,3 +117,59 @@ export interface HealthResponse {
   status: string;
   environment: string;
 }
+
+export type AppointmentStatus =
+  | "scheduled"
+  | "cancelled"
+  | "completed"
+  | "rescheduled";
+
+export interface AppointmentRead {
+  id: string;
+  user_id?: string | null;
+  summary: string;
+  description?: string | null;
+  attendee_email?: string | null;
+  attendee_name?: string | null;
+  starts_at: string;
+  ends_at: string;
+  calendar_id: string;
+  google_event_id?: string | null;
+  status: AppointmentStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentListResponse {
+  items: AppointmentRead[];
+  total: number;
+}
+
+export type ConversationStatus = "active" | "closed" | "escalated";
+export type ReminderStatus = "scheduled" | "sent" | "cancelled" | "failed";
+
+export interface InboxConversationItem {
+  id: string;
+  session_id: string;
+  summary?: string | null;
+  status: ConversationStatus;
+  extra_data: Record<string, unknown>;
+  updated_at: string;
+  last_message?: string | null;
+}
+
+export interface InboxReminderItem {
+  id: string;
+  conversation_id?: string | null;
+  session_id?: string | null;
+  note: string;
+  remind_at: string;
+  status: ReminderStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InboxResponse {
+  escalated: InboxConversationItem[];
+  reminders: InboxReminderItem[];
+}

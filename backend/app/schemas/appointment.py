@@ -45,3 +45,8 @@ class AppointmentRead(AppointmentBase, ORMModel):
     user_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class AppointmentListResponse(BaseModel):
+    items: list[AppointmentRead]
+    total: int
