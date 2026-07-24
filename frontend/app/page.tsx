@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, type Transition } from "framer-motion";
 import {
   ArrowRight,
   CalendarCheck,
@@ -97,11 +97,13 @@ const faqs = [
   },
 ];
 
+const fadeTransition: Transition = { duration: 0.45, ease: "easeOut" };
+
 const fade = {
   initial: { opacity: 0, y: 12 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, margin: "-48px" },
-  transition: { duration: 0.45, ease: "easeOut" as const },
+  transition: fadeTransition,
 };
 
 const chatMessages = [
@@ -289,7 +291,7 @@ export default function LandingPage() {
             <motion.div
               key={item.title}
               {...fade}
-              transition={{ ...fade.transition, delay: i * 0.06 }}
+              transition={{ ...fadeTransition, delay: i * 0.06 }}
               className="group relative overflow-hidden rounded-2xl border bg-card p-6 shadow-soft transition-shadow hover:shadow-md"
             >
               <div
@@ -353,7 +355,7 @@ export default function LandingPage() {
             <motion.div
               key={item.title}
               {...fade}
-              transition={{ ...fade.transition, delay: i * 0.05 }}
+              transition={{ ...fadeTransition, delay: i * 0.05 }}
               className="group flex gap-4 rounded-2xl border bg-card p-5 shadow-soft transition-all hover:border-amber-500/20 hover:shadow-md"
             >
               <div
@@ -447,7 +449,7 @@ export default function LandingPage() {
             <motion.div
               key={item.q}
               {...fade}
-              transition={{ ...fade.transition, delay: i * 0.04 }}
+              transition={{ ...fadeTransition, delay: i * 0.04 }}
               className="rounded-xl border bg-card/60 p-5 shadow-soft transition-colors hover:bg-card"
             >
               <h3 className="font-medium leading-snug">{item.q}</h3>
