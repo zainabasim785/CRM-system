@@ -101,7 +101,7 @@ const fade = {
   initial: { opacity: 0, y: 12 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, margin: "-48px" },
-  transition: { duration: 0.45, ease: "easeOut" },
+  transition: { duration: 0.45, ease: "easeOut" as const },
 };
 
 const chatMessages = [
