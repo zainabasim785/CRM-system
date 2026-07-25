@@ -3,6 +3,6 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci",
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://definitions-spoken-toys-reserves.trycloudflare.com"
+    "NEXT_PUBLIC_API_URL": "https://qualified-owned-ruth-blue.trycloudflare.com"
   }
 }
